@@ -4,9 +4,9 @@ const CONFIG = {
   depthUrl:     'Delta_Amphitheater_Depth.png',      // grayscale depth map (white = near, black = far)
 
   // Parallax
-  parallaxStrength: 0.012,         // max world-space camera offset (units)
+  parallaxStrength: 0.015,         // max world-space camera offset (units)
   parallaxDamping:  0.88,         // velocity decay per frame (0=instant, 1=no decay)
-  parallaxSmooth:   0.2,         // lerp factor toward target (lower = smoother)
+  parallaxSmooth:   0.5,         // lerp factor toward target (lower = smoother)
   nearRadius:       0.250,         // sphere radius for near objects (depth=1)
   farRadius:        1.00,         // sphere radius for far objects  (depth=0)
 
@@ -242,7 +242,7 @@ if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
 const _accelVec = new THREE.Vector3();
 
 window.addEventListener('devicemotion', (e) => {
-  const a = e.accelerationIncludingGravity;
+  const a = e.acceleration;
   if (!a) return;
 
   // Device frame acceleration
@@ -252,7 +252,7 @@ window.addEventListener('devicemotion', (e) => {
   _accelVec.applyQuaternion(camera.quaternion);
 
   // Scale down and apply — tweak the multiplier to taste
-  parallaxVelocity.addScaledVector(_accelVec, 0.0001);
+  parallaxVelocity.addScaledVector(_accelVec, 0.0004);
 }, true);
 
 // ─── KEYBOARD CONTROLS ───────────────────────────────────────────────────────
@@ -372,8 +372,9 @@ camera.rotation.order = 'YXZ';
 function applyGyroToCamera() {
   if (hasGyro && typeof Gyroscope !== 'undefined' && isMobile) {
     const corrected = _rawQ.clone().multiply(screenQuat);
+    _smoothQ.slerp(corrected, SMOOTH);
     camera.quaternion.copy(_smoothQ)
-    .multiply(_touchOffsetQ);
+      .multiply(_touchOffsetQ);
     return;
   }
   if (hasGyro) {
