@@ -200,17 +200,21 @@ if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
 }
 
 // ─── DEVICE MOTION (ACCELEROMETER → PARALLAX) ────────────────────────────────
+
+const _accelVec = new THREE.Vector3();
+
 window.addEventListener('devicemotion', (e) => {
   const a = e.accelerationIncludingGravity;
   if (!a) return;
 
-  // We only use lateral (x/y) acceleration for parallax offset.
-  // The spring-damper below keeps it bounded and natural-feeling.
-  const ax = (a.x || 0) * 0.001;
-  const ay = (a.y || 0) * 0.001;
+  // Device frame acceleration
+  _accelVec.set(a.x || 0, a.y || 0, a.z || 0);
 
-  parallaxVelocity.x += ax;
-  parallaxVelocity.y += ay;
+  // Rotate into world space using the camera's current orientation
+  _accelVec.applyQuaternion(camera.quaternion);
+
+  // Scale down and apply — tweak the multiplier to taste
+  parallaxVelocity.addScaledVector(_accelVec, 0.00008);
 }, true);
 
 // ─── KEYBOARD CONTROLS ───────────────────────────────────────────────────────
