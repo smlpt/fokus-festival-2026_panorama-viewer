@@ -92,8 +92,10 @@ let isDragging = false;
 let dragStart  = { x: 0, y: 0 };
 let yaw = 0, pitch = 0;               // radians
 
-const screenQuatPortrait  = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
-const screenQuatLandscape = new THREE.Quaternion(-0.5, -0.5, 0.5, 0.5);
+// Portrait: device Y = screen Y, no correction needed beyond the base tilt
+const screenQuatPortrait       = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
+const screenQuatLandscapeLeft  = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1), -Math.PI/2).premultiply(screenQuatPortrait);
+const screenQuatLandscapeRight = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,0,1),  Math.PI/2).premultiply(screenQuatPortrait);
 
 // ─── SCENE SETUP ─────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -311,7 +313,9 @@ let screenQuat = new THREE.Quaternion();
 
 function updateScreenOrientation() {
   const angle = screen.orientation?.angle ?? window.orientation ?? 0;
-  screenQuat.copy(angle === 90 || angle === -90 ? screenQuatLandscape : screenQuatPortrait);
+  if      (angle ===  90) screenQuat.copy(screenQuatLandscapeLeft);
+  else if (angle === -90 || angle === 270) screenQuat.copy(screenQuatLandscapeRight);
+  else                    screenQuat.copy(screenQuatPortrait);
 }
 
 window.addEventListener('orientationchange', updateScreenOrientation);
