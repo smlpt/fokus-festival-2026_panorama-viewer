@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Panorama Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; width: 100vw; height: 100vh; }
+    canvas { display: block; }
+
+    #ui {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: #fff;
+      font-family: monospace;
+      font-size: 12px;
+      background: rgba(0,0,0,0.45);
+      padding: 10px 14px;
+      border-radius: 8px;
+      line-height: 1.8;
+      pointer-events: none;
+    }
+
+    #permission-btn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.4);
+      padding: 14px 28px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: none;
+    }
+    #permission-btn:hover { background: rgba(255,255,255,0.25); }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div>↑↓←→ rotate &nbsp;|&nbsp; SHIFT+↑↓ tilt</div>
+    <div>WASD / arrow keys: parallax offset</div>
+    <div id="debug-gyro">gyro: —</div>
+    <div id="debug-offset">offset: 0.00, 0.00, 0.00</div>
+    <div id="debug-depth">depth strength: <span id="depth-val">1.0</span></div>
+  </div>
+
+  <!-- iOS requires a user gesture to enable DeviceMotion -->
+  <button id="permission-btn" onclick="requestMotionPermission()">
+    Tap to enable gyroscope
+  </button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="viewer.js"></script>
+</body>
+</html>
