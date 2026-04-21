@@ -103,6 +103,7 @@ document.body.appendChild(renderer.domElement);
 
 const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 10);
+let fov = 75;
 camera.position.set(0, 0, 0);
 
 // Sphere: coarse mesh — detail comes from the shader, not geometry
@@ -266,6 +267,35 @@ renderer.domElement.addEventListener('touchmove', e => {
   pitch += (e.touches[0].clientY - lastTouch.y) * 0.002;
   pitch  = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
   lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  e.preventDefault();
+}, { passive: false });
+
+// --- ZOOMING -----------------------
+
+function applyZoom(delta) {
+  fov = Math.max(30, Math.min(110, fov + delta));
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+}
+
+// Scroll wheel
+renderer.domElement.addEventListener('wheel', e => {
+  applyZoom(e.deltaY * 0.05);
+  e.preventDefault();
+}, { passive: false });
+
+// Pinch
+let lastPinchDist = null;
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) lastPinchDist = null;
+});
+renderer.domElement.addEventListener('touchmove', e => {
+  if (e.touches.length !== 2) { lastPinchDist = null; return; }
+  const dx = e.touches[0].clientX - e.touches[1].clientX;
+  const dy = e.touches[0].clientY - e.touches[1].clientY;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (lastPinchDist !== null) applyZoom((lastPinchDist - dist) * 0.1);
+  lastPinchDist = dist;
   e.preventDefault();
 }, { passive: false });
 
