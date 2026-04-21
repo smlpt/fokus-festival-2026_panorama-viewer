@@ -172,12 +172,14 @@ function createFlatDepthTexture() {
 // ─── DEVICE ORIENTATION (GYROSCOPE) ──────────────────────────────────────────
 
 const _deltaQ  = new THREE.Quaternion();
+const _rawQ = new THREE.Quaternion();
 const _axis    = new THREE.Vector3();
 const _smoothQ = new THREE.Quaternion(); // smoothed camera quaternion
 const SMOOTH   = 0.25; // 0=no smoothing, 1=frozen — tune this
 
 function startGyroscope() {
-  if (typeof Gyroscope !== 'undefined') {
+  const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+  if (typeof Gyroscope !== 'undefined' && isMobile) {
     const gyro = new Gyroscope({ frequency: 60 });
     let lastTime = null;
 
@@ -194,13 +196,10 @@ function startGyroscope() {
       _axis.set(wx, wy, wz).normalize();
       _deltaQ.setFromAxisAngle(_axis, angle);
 
-      // Integrate raw rotation
-      camera.quaternion.multiply(_deltaQ);
-      camera.quaternion.multiply(screenQuat);
-
       // Exponential smoothing toward integrated rotation
-      _smoothQ.slerp(camera.quaternion, SMOOTH);
-      camera.quaternion.copy(_smoothQ);
+      _rawQ.multiply(_deltaQ);
+      _rawQ.multiply(screenQuat);
+      camera.quaternion.slerp(_rawQ, SMOOTH);
     });
 
     gyro.start();
@@ -301,7 +300,12 @@ window.addEventListener('mousemove', e => {
 // Touch rotation
 let lastTouch = null;
 renderer.domElement.addEventListener('touchstart', e => {
-  if (e.touches.length === 1) lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  if (e.touches.length === 1) {
+    lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  } else {
+    lastTouch = null; // clear on multi-touch to prevent jump
+    if (e.touches.length === 2) lastPinchDist = null;
+  }
 });
 renderer.domElement.addEventListener('touchmove', e => {
   if (e.touches.length !== 1 || !lastTouch) return;
@@ -362,12 +366,11 @@ function updateScreenOrientation() {
 window.addEventListener('orientationchange', updateScreenOrientation);
 updateScreenOrientation(); // call once on load
 
+camera.rotation.order = 'YXZ';
+
 function applyGyroToCamera() {
-  if (hasGyro && typeof Gyroscope !== 'undefined') {
-    return; // already handled in gyro.addEventListener('reading')
-  }
+  if (hasGyro && typeof Gyroscope !== 'undefined') return;
   if (hasGyro) {
-    // deviceorientation fallback
     _euler.set(
       THREE.MathUtils.degToRad(deviceBeta),
       THREE.MathUtils.degToRad(deviceAlpha),
@@ -378,8 +381,6 @@ function applyGyroToCamera() {
     camera.quaternion.multiply(screenQuat);
     return;
   }
-  // Desktop: mouse/keyboard rotation
-  camera.rotation.order = 'YXZ';
   camera.rotation.y = yaw;
   camera.rotation.x = pitch;
 }
