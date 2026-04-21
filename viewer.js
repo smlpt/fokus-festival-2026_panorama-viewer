@@ -178,7 +178,7 @@ const _deltaQ  = new THREE.Quaternion();
 const _rawQ = new THREE.Quaternion();
 const _axis    = new THREE.Vector3();
 const _smoothQ = new THREE.Quaternion(); // smoothed camera quaternion
-const SMOOTH   = 0.05; // 0=no smoothing, 1=frozen — tune this
+const SMOOTH   = 0.3; // 0=no smoothing, 1=frozen — tune this
 
 function startGyroscope() {
   
@@ -241,19 +241,19 @@ if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
 
 const _accelVec = new THREE.Vector3();
 
-// window.addEventListener('devicemotion', (e) => {
-//   const a = e.accelerationIncludingGravity;
-//   if (!a) return;
+window.addEventListener('devicemotion', (e) => {
+  const a = e.accelerationIncludingGravity;
+  if (!a) return;
 
-//   // Device frame acceleration
-//   _accelVec.set(a.x || 0, a.y || 0, a.z || 0);
+  // Device frame acceleration
+  _accelVec.set(a.x || 0, a.y || 0, a.z || 0);
 
-//   // Rotate into world space using the camera's current orientation
-//   _accelVec.applyQuaternion(camera.quaternion);
+  // Rotate into world space using the camera's current orientation
+  _accelVec.applyQuaternion(camera.quaternion);
 
-//   // Scale down and apply — tweak the multiplier to taste
-//   parallaxVelocity.addScaledVector(_accelVec, 0.00008);
-// }, true);
+  // Scale down and apply — tweak the multiplier to taste
+  parallaxVelocity.addScaledVector(_accelVec, 0.0001);
+}, true);
 
 // ─── KEYBOARD CONTROLS ───────────────────────────────────────────────────────
 window.addEventListener('keydown', e => { keys[e.code] = true;  });
