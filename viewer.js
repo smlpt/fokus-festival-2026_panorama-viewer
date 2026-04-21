@@ -170,16 +170,52 @@ function createFlatDepthTexture() {
 }
 
 // ─── DEVICE ORIENTATION (GYROSCOPE) ──────────────────────────────────────────
+
+const _deltaQ  = new THREE.Quaternion();
+const _axis    = new THREE.Vector3();
+const _smoothQ = new THREE.Quaternion(); // smoothed camera quaternion
+const SMOOTH   = 0.25; // 0=no smoothing, 1=frozen — tune this
+
 function startGyroscope() {
-  window.addEventListener('deviceorientation', (e) => {
-    if (e.alpha === null) return;
+  if (typeof Gyroscope !== 'undefined') {
+    const gyro = new Gyroscope({ frequency: 60 });
+    let lastTime = null;
+
+    gyro.addEventListener('reading', () => {
+      const now = gyro.timestamp;
+      if (lastTime === null) { lastTime = now; return; }
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      const wx = gyro.x, wy = gyro.y, wz = gyro.z;
+      const angle = Math.sqrt(wx*wx + wy*wy + wz*wz) * dt;
+      if (angle < 1e-10) return;
+
+      _axis.set(wx, wy, wz).normalize();
+      _deltaQ.setFromAxisAngle(_axis, angle);
+
+      // Integrate raw rotation
+      camera.quaternion.multiply(_deltaQ);
+      camera.quaternion.multiply(screenQuat);
+
+      // Exponential smoothing toward integrated rotation
+      _smoothQ.slerp(camera.quaternion, SMOOTH);
+      camera.quaternion.copy(_smoothQ);
+    });
+
+    gyro.start();
     hasGyro = true;
-    deviceAlpha = e.alpha;   // compass heading 0–360
-    deviceBeta  = e.beta;    // front/back tilt -180–180
-    deviceGamma = e.gamma;   // left/right tilt -90–90
-    document.getElementById('debug-gyro').textContent =
-      `gyro: α${deviceAlpha.toFixed(1)} β${deviceBeta.toFixed(1)} γ${deviceGamma.toFixed(1)}`;
-  }, true);
+
+  } else {
+    // Fallback: deviceorientation (magnetometer-based, has the roll drift issue)
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.alpha === null) return;
+      hasGyro = true;
+      deviceAlpha = e.alpha;
+      deviceBeta  = e.beta;
+      deviceGamma = e.gamma;
+    }, true);
+  }
 }
 
 // iOS 13+ requires explicit permission
@@ -269,10 +305,15 @@ renderer.domElement.addEventListener('touchstart', e => {
 });
 renderer.domElement.addEventListener('touchmove', e => {
   if (e.touches.length !== 1 || !lastTouch) return;
-  yaw   += (e.touches[0].clientX - lastTouch.x) * 0.002;
-  pitch += (e.touches[0].clientY - lastTouch.y) * 0.002;
-  pitch  = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
+  const dx = (e.touches[0].clientX - lastTouch.x) * 0.002;
+  const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
   lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+
+  // Apply touch delta as a rotation on top of whatever the gyro has set
+  const qYaw   = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), dx);
+  const qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), dy);
+  camera.quaternion.premultiply(qYaw).multiply(qPitch);
+
   e.preventDefault();
 }, { passive: false });
 
@@ -322,21 +363,25 @@ window.addEventListener('orientationchange', updateScreenOrientation);
 updateScreenOrientation(); // call once on load
 
 function applyGyroToCamera() {
-  if (!hasGyro) {
-    // Keyboard/mouse rotation
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = yaw;
-    camera.rotation.x = pitch;
+  if (hasGyro && typeof Gyroscope !== 'undefined') {
+    return; // already handled in gyro.addEventListener('reading')
+  }
+  if (hasGyro) {
+    // deviceorientation fallback
+    _euler.set(
+      THREE.MathUtils.degToRad(deviceBeta),
+      THREE.MathUtils.degToRad(deviceAlpha),
+      THREE.MathUtils.degToRad(-deviceGamma),
+      'YXZ'
+    );
+    camera.quaternion.setFromEuler(_euler);
+    camera.quaternion.multiply(screenQuat);
     return;
   }
-  _euler.set(
-    THREE.MathUtils.degToRad(deviceBeta),
-    THREE.MathUtils.degToRad(deviceAlpha),
-    THREE.MathUtils.degToRad(-deviceGamma),
-    'YXZ'
-  );
-  camera.quaternion.setFromEuler(_euler);
-  camera.quaternion.multiply(screenQuat);
+  // Desktop: mouse/keyboard rotation
+  camera.rotation.order = 'YXZ';
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
 }
 
 // ─── PARALLAX SPRING-DAMPER ───────────────────────────────────────────────────
