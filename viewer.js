@@ -5,8 +5,8 @@ const CONFIG = {
 
   // Parallax
   parallaxStrength: 0.015,         // max world-space camera offset (units)
-  parallaxDamping:  0.88,         // velocity decay per frame (0=instant, 1=no decay)
-  parallaxSmooth:   0.5,         // lerp factor toward target (lower = smoother)
+  parallaxDamping:  0.8,         // velocity decay per frame (0=instant, 1=no decay)
+  parallaxSmooth:   0.9,         // lerp factor toward target (lower = smoother)
   nearRadius:       0.250,         // sphere radius for near objects (depth=1)
   farRadius:        1.00,         // sphere radius for far objects  (depth=0)
 
@@ -247,6 +247,9 @@ window.addEventListener('devicemotion', (e) => {
 
   // Device frame acceleration
   _accelVec.set(a.x || 0, a.y || 0, a.z || 0);
+
+  document.getElementById('debug-acceleration').textContent =
+    `acc: ${a.x.toFixed(2)}, ${a.y.toFixed(2)}, ${a.z.toFixed(2)}`;
 
   // Rotate into world space using the camera's current orientation
   _accelVec.applyQuaternion(camera.quaternion);
