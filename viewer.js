@@ -78,6 +78,8 @@ let parallaxVelocity = new THREE.Vector3();
 let parallaxPosition = new THREE.Vector3();
 let targetOffset     = new THREE.Vector3();
 
+const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
 // Get camera's right and forward vectors in world space
 const right   = new THREE.Vector3();
 const forward = new THREE.Vector3();
@@ -91,6 +93,7 @@ let hasGyro = false;
 let isDragging = false;
 let dragStart  = { x: 0, y: 0 };
 let yaw = 0, pitch = 0;               // radians
+const _touchOffsetQ = new THREE.Quaternion(); // accumulates touch deltas
 
 // Portrait: device Y = screen Y, no correction needed beyond the base tilt
 const screenQuatPortrait       = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
@@ -175,10 +178,10 @@ const _deltaQ  = new THREE.Quaternion();
 const _rawQ = new THREE.Quaternion();
 const _axis    = new THREE.Vector3();
 const _smoothQ = new THREE.Quaternion(); // smoothed camera quaternion
-const SMOOTH   = 0.25; // 0=no smoothing, 1=frozen — tune this
+const SMOOTH   = 0.05; // 0=no smoothing, 1=frozen — tune this
 
 function startGyroscope() {
-  const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+  
   if (typeof Gyroscope !== 'undefined' && isMobile) {
     const gyro = new Gyroscope({ frequency: 60 });
     let lastTime = null;
@@ -198,8 +201,6 @@ function startGyroscope() {
 
       // Exponential smoothing toward integrated rotation
       _rawQ.multiply(_deltaQ);
-      _rawQ.multiply(screenQuat);
-      camera.quaternion.slerp(_rawQ, SMOOTH);
     });
 
     gyro.start();
@@ -316,7 +317,7 @@ renderer.domElement.addEventListener('touchmove', e => {
   // Apply touch delta as a rotation on top of whatever the gyro has set
   const qYaw   = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), dx);
   const qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), dy);
-  camera.quaternion.premultiply(qYaw).multiply(qPitch);
+  _touchOffsetQ.premultiply(qYaw).multiply(qPitch);
 
   e.preventDefault();
 }, { passive: false });
@@ -345,7 +346,7 @@ renderer.domElement.addEventListener('touchmove', e => {
   const dx = e.touches[0].clientX - e.touches[1].clientX;
   const dy = e.touches[0].clientY - e.touches[1].clientY;
   const dist = Math.sqrt(dx*dx + dy*dy);
-  if (lastPinchDist !== null) applyZoom((lastPinchDist - dist) * 0.1);
+  if (lastPinchDist !== null) applyZoom((lastPinchDist - dist) * 0.2);
   lastPinchDist = dist;
   e.preventDefault();
 }, { passive: false });
@@ -369,7 +370,12 @@ updateScreenOrientation(); // call once on load
 camera.rotation.order = 'YXZ';
 
 function applyGyroToCamera() {
-  if (hasGyro && typeof Gyroscope !== 'undefined') return;
+  if (hasGyro && typeof Gyroscope !== 'undefined' && isMobile) {
+    const corrected = _rawQ.clone().multiply(screenQuat);
+    camera.quaternion.copy(_smoothQ)
+    .multiply(_touchOffsetQ);
+    return;
+  }
   if (hasGyro) {
     _euler.set(
       THREE.MathUtils.degToRad(deviceBeta),
