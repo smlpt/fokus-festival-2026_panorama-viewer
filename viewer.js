@@ -5,8 +5,8 @@ const CONFIG = {
 
   // Parallax
   parallaxStrength: 0.015,         // max world-space camera offset (units)
-  parallaxDamping:  0.8,         // velocity decay per frame (0=instant, 1=no decay)
-  parallaxSmooth:   0.9,         // lerp factor toward target (lower = smoother)
+  parallaxDamping:  0.9,         // velocity decay per frame (0=instant, 1=no decay)
+  parallaxSmooth:   0.2,         // lerp factor toward target (lower = smoother)
   nearRadius:       0.250,         // sphere radius for near objects (depth=1)
   farRadius:        1.00,         // sphere radius for far objects  (depth=0)
 
@@ -88,6 +88,10 @@ const up      = new THREE.Vector3(0, 1, 0);
 // Gyroscope / device orientation state
 let deviceAlpha = 0, deviceBeta = 0, deviceGamma = 0;
 let hasGyro = false;
+
+const _prevGyroQ = new THREE.Quaternion();
+const _deltaGyroQ = new THREE.Quaternion();
+const PIVOT_RADIUS = 0.005; // metres, distance from phone to head pivot
 
 // Mouse-drag state (desktop fallback for rotation)
 let isDragging = false;
@@ -178,45 +182,20 @@ const _deltaQ  = new THREE.Quaternion();
 const _rawQ = new THREE.Quaternion();
 const _axis    = new THREE.Vector3();
 const _smoothQ = new THREE.Quaternion(); // smoothed camera quaternion
-const SMOOTH   = 0.3; // 0=no smoothing, 1=frozen — tune this
+const SMOOTH   = 0.6; // 0=no smoothing, 1=frozen — tune this
 
 function startGyroscope() {
-  
-  if (typeof Gyroscope !== 'undefined' && isMobile) {
-    const gyro = new Gyroscope({ frequency: 60 });
-    let lastTime = null;
-
-    gyro.addEventListener('reading', () => {
-      const now = gyro.timestamp;
-      if (lastTime === null) { lastTime = now; return; }
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
-
-      const wx = gyro.x, wy = gyro.y, wz = gyro.z;
-      const angle = Math.sqrt(wx*wx + wy*wy + wz*wz) * dt;
-      if (angle < 1e-10) return;
-
-      _axis.set(wx, wy, wz).normalize();
-      _deltaQ.setFromAxisAngle(_axis, angle);
-
-      // Exponential smoothing toward integrated rotation
-      _rawQ.multiply(_deltaQ);
-    });
-
-    gyro.start();
+  window.addEventListener('deviceorientation', (e) => {
+    if (e.alpha === null) return;
     hasGyro = true;
-
-  } else {
-    // Fallback: deviceorientation (magnetometer-based, has the roll drift issue)
-    window.addEventListener('deviceorientation', (e) => {
-      if (e.alpha === null) return;
-      hasGyro = true;
-      deviceAlpha = e.alpha;
-      deviceBeta  = e.beta;
-      deviceGamma = e.gamma;
-    }, true);
+    deviceAlpha = lerp(deviceAlpha, e.alpha, SMOOTH);   // compass heading 0–360
+    deviceBeta = lerp(deviceBeta, e.beta, SMOOTH);    // front/back tilt -180–180
+    deviceGamma = lerp(deviceGamma, e.gamma, SMOOTH);   // left/right tilt -90–90
+    console.log("device alpha: ", deviceAlpha)
+    // document.getElementById('debug-gyro').textContent =
+    //   `gyro: α${deviceAlpha.toFixed(1)} β${deviceBeta.toFixed(1)} γ${deviceGamma.toFixed(1)}`;
+  }, true);
   }
-}
 
 // iOS 13+ requires explicit permission
 function requestMotionPermission() {
@@ -235,54 +214,6 @@ if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
   document.getElementById('permission-btn').style.display = 'block';
 } else {
   startGyroscope();
-}
-
-// ─── DEVICE MOTION (ACCELEROMETER → PARALLAX) ────────────────────────────────
-
-const _accelVec = new THREE.Vector3();
-
-window.addEventListener('devicemotion', (e) => {
-  const a = e.acceleration;
-  if (!a) return;
-
-  // Device frame acceleration
-  _accelVec.set(a.x || 0, a.y || 0, a.z || 0);
-
-  document.getElementById('debug-acceleration').textContent =
-    `acc: ${a.x.toFixed(2)}, ${a.y.toFixed(2)}, ${a.z.toFixed(2)}`;
-
-  // Rotate into world space using the camera's current orientation
-  _accelVec.applyQuaternion(camera.quaternion);
-
-  // Scale down and apply — tweak the multiplier to taste
-  parallaxVelocity.addScaledVector(_accelVec, 0.0004);
-}, true);
-
-// ─── KEYBOARD CONTROLS ───────────────────────────────────────────────────────
-window.addEventListener('keydown', e => { keys[e.code] = true;  });
-window.addEventListener('keyup',   e => { keys[e.code] = false; });
-
-function applyKeyboardInput() {
-  const s = CONFIG.keyStep;
-
-  camera.getWorldDirection(forward);
-  right.crossVectors(forward, up).normalize();
-  // Project impulses onto camera basis
-  if (keys['ArrowLeft']  || keys['KeyA']) parallaxVelocity.addScaledVector(right, s);
-  if (keys['ArrowRight'] || keys['KeyD']) parallaxVelocity.addScaledVector(right,  -s);
-  if (keys['ArrowUp']    || keys['KeyW']) parallaxVelocity.addScaledVector(forward, -s);
-  if (keys['ArrowDown']  || keys['KeyS']) parallaxVelocity.addScaledVector(forward, s);
-  if (keys['KeyQ']) parallaxVelocity.addScaledVector(up, s);
-  if (keys['KeyE']) parallaxVelocity.addScaledVector(up,  -s);
-
-  // Mouse-drag rotation via SHIFT+arrows
-  if (keys['ShiftLeft'] || keys['ShiftRight']) {
-    if (keys['ArrowLeft'])  yaw   += 0.01;
-    if (keys['ArrowRight']) yaw   -= 0.01;
-    if (keys['ArrowUp'])    pitch += 0.01;
-    if (keys['ArrowDown'])  pitch -= 0.01;
-    pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, pitch));
-  }
 }
 
 // ─── MOUSE DRAG (DESKTOP ROTATION) ───────────────────────────────────────────
@@ -356,7 +287,6 @@ renderer.domElement.addEventListener('touchmove', e => {
 
 // ─── GYRO → CAMERA QUATERNION ────────────────────────────────────────────────
 const _euler = new THREE.Euler();
-const _q     = new THREE.Quaternion();
 
 let screenQuat = new THREE.Quaternion();
 
@@ -373,13 +303,6 @@ updateScreenOrientation(); // call once on load
 camera.rotation.order = 'YXZ';
 
 function applyGyroToCamera() {
-  if (hasGyro && typeof Gyroscope !== 'undefined' && isMobile) {
-    const corrected = _rawQ.clone().multiply(screenQuat);
-    _smoothQ.slerp(corrected, SMOOTH);
-    camera.quaternion.copy(_smoothQ)
-      .multiply(_touchOffsetQ);
-    return;
-  }
   if (hasGyro) {
     _euler.set(
       THREE.MathUtils.degToRad(deviceBeta),
@@ -389,6 +312,7 @@ function applyGyroToCamera() {
     );
     camera.quaternion.setFromEuler(_euler);
     camera.quaternion.multiply(screenQuat);
+    camera.quaternion.multiply(_touchOffsetQ);
     return;
   }
   camera.rotation.y = yaw;
@@ -399,28 +323,19 @@ function applyGyroToCamera() {
 const _maxOffset = CONFIG.parallaxStrength;
 
 function updateParallax() {
-  // Decay velocity (spring pull toward zero)
-  parallaxVelocity.multiplyScalar(CONFIG.parallaxDamping);
+  // // Extract right and up from current camera orientation
+  camera.getWorldDirection(forward);
 
-  // Accumulate position
-  parallaxPosition.add(parallaxVelocity);
+  const targetPosition = new THREE.Vector3();
+  targetPosition.addScaledVector(forward, -0.07);
 
-  // Clamp to bounds
-  parallaxPosition.clampScalar(-_maxOffset, _maxOffset);
-  parallaxPosition.multiplyScalar(0.99);
-
-  // Smooth lerp toward position
-  targetOffset.lerp(parallaxPosition, CONFIG.parallaxSmooth);
-
-  // Push to shader
-  material.uniforms.parallaxOffset.value.copy(targetOffset);
+  material.uniforms.parallaxOffset.value.copy(targetPosition);
 }
 
 // ─── RENDER LOOP ──────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
 
-  applyKeyboardInput();
   applyGyroToCamera();
   updateParallax();
 
@@ -439,3 +354,10 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+
+// UTILS
+
+function lerp(a, b, t) {
+	return a * (1 - t) + b * t;
+}
