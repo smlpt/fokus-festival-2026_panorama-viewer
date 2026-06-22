@@ -4,8 +4,7 @@ const CONFIG = {
   depthUrl:     'Delta_Amphitheater_Depth.png',      // grayscale depth map (white = near, black = far)
 
   // Parallax
-  parallaxStrength: 0.5,         // max world-space camera offset (units)
-  parallaxDamping:  0.9,         // velocity decay per frame (0=instant, 1=no decay)
+  parallaxStrength: 0.3,         // max world-space camera offset (units)
   gyroSmoothing:    0.2,         // lerp factor toward target (lower = smoother)
   nearRadius:       0.20,         // sphere radius for near objects (depth=1)
   farRadius:        1.0,         // sphere radius for far objects  (depth=0)
@@ -52,7 +51,7 @@ const fragmentShader = `
     vec2 baseUV = dirToUV(vRayDir);
 
     // Sample depth at the base direction (no parallax needed for depth lookup)
-    float depth = texture2D(depthMap, baseUV).r * depthStrength;
+    float depth = texture2D(depthMap, baseUV).r;
     depth = pow(depth, 2.0);
 
     // Place the surface point on a sphere whose radius varies with depth.
@@ -63,7 +62,7 @@ const fragmentShader = `
     vec3 surfacePoint = vRayDir * radius;
 
     // Shift the surface point as if the camera moved in the opposite direction.
-    vec3 displaced = surfacePoint - parallaxOffset;
+    vec3 displaced = surfacePoint - parallaxOffset * depthStrength;
 
     // Re-project back to equirectangular UV for the final colour sample.
     vec2 warpedUV = dirToUV(displaced);
@@ -318,7 +317,7 @@ camera.rotation.order = 'YXZ';
 function applyGyroToCamera() {
   if (hasGyro) {
     // Combine the accumulated gyro rotation with the touch offset
-    const finalQ = _currentGyroQ.clone().multiply(_touchOffsetQ);
+    const finalQ = _touchOffsetQ.clone().multiply(_currentGyroQ);
 
     camera.quaternion.copy(finalQ);
     return;
@@ -328,14 +327,13 @@ function applyGyroToCamera() {
 }
 
 // ─── PARALLAX SPRING-DAMPER ───────────────────────────────────────────────────
-const _maxOffset = CONFIG.parallaxStrength;
 
 function updateParallax() {
   // // Extract right and up from current camera orientation
   camera.getWorldDirection(forward);
 
   const targetPosition = new THREE.Vector3();
-  targetPosition.addScaledVector(forward, -0.07);
+  targetPosition.addScaledVector(forward, -0.1);
 
   material.uniforms.parallaxOffset.value.copy(targetPosition);
 }
