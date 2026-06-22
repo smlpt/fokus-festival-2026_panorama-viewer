@@ -4,11 +4,11 @@ const CONFIG = {
   depthUrl:     'Delta_Amphitheater_Depth.png',      // grayscale depth map (white = near, black = far)
 
   // Parallax
-  parallaxStrength: 0.015,         // max world-space camera offset (units)
+  parallaxStrength: 0.5,         // max world-space camera offset (units)
   parallaxDamping:  0.9,         // velocity decay per frame (0=instant, 1=no decay)
-  parallaxSmooth:   0.2,         // lerp factor toward target (lower = smoother)
-  nearRadius:       0.250,         // sphere radius for near objects (depth=1)
-  farRadius:        1.00,         // sphere radius for far objects  (depth=0)
+  gyroSmoothing:    0.2,         // lerp factor toward target (lower = smoother)
+  nearRadius:       0.20,         // sphere radius for near objects (depth=1)
+  farRadius:        1.0,         // sphere radius for far objects  (depth=0)
 
   // Keyboard simulation (desktop testing)
   keyStep: 0.00005,                 // how much each key press nudges velocity
@@ -76,7 +76,7 @@ const fragmentShader = `
 const keys = {};                        // currently held keyboard keys
 let parallaxVelocity = new THREE.Vector3();
 let parallaxPosition = new THREE.Vector3();
-let targetOffset     = new THREE.Vector3();
+//let targetOffset     = new THREE.Vector3();
 
 const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
@@ -86,18 +86,21 @@ const forward = new THREE.Vector3();
 const up      = new THREE.Vector3(0, 1, 0);
 
 // Gyroscope / device orientation state
-let deviceAlpha = 0, deviceBeta = 0, deviceGamma = 0;
+let prevDeviceAlpha = null; // Store previous alpha to calculate delta
 let hasGyro = false;
 
-const _prevGyroQ = new THREE.Quaternion();
-const _deltaGyroQ = new THREE.Quaternion();
+const _targetGyroQ  = new THREE.Quaternion(); // Temporary for delta calculation
+const _currentGyroQ = new THREE.Quaternion(); // The accumulated camera rotation from gyro
+
+// We'll store the touch offset separately so it doesn't get mixed into the gyro accumulation incorrectly
+let _touchOffsetQ = new THREE.Quaternion().identity(); 
+
 const PIVOT_RADIUS = 0.005; // metres, distance from phone to head pivot
 
 // Mouse-drag state (desktop fallback for rotation)
 let isDragging = false;
 let dragStart  = { x: 0, y: 0 };
 let yaw = 0, pitch = 0;               // radians
-const _touchOffsetQ = new THREE.Quaternion(); // accumulates touch deltas
 
 // Portrait: device Y = screen Y, no correction needed beyond the base tilt
 const screenQuatPortrait       = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
@@ -136,7 +139,7 @@ const material = new THREE.ShaderMaterial({
     parallaxOffset: { value: new THREE.Vector3() },
     nearRadius:     { value: CONFIG.nearRadius   },
     farRadius:      { value: CONFIG.farRadius    },
-    depthStrength:  { value: 1.0                 },
+    depthStrength:  { value: CONFIG.parallaxStrength},
   },
   side: THREE.FrontSide,
 });
@@ -186,16 +189,26 @@ const SMOOTH   = 0.6; // 0=no smoothing, 1=frozen — tune this
 
 function startGyroscope() {
   window.addEventListener('deviceorientation', (e) => {
-    if (e.alpha === null) return;
+    if (e.alpha === null || e.beta === null || e.gamma === null) return;
     hasGyro = true;
-    deviceAlpha = lerp(deviceAlpha, e.alpha, SMOOTH);   // compass heading 0–360
-    deviceBeta = lerp(deviceBeta, e.beta, SMOOTH);    // front/back tilt -180–180
-    deviceGamma = lerp(deviceGamma, e.gamma, SMOOTH);   // left/right tilt -90–90
-    console.log("device alpha: ", deviceAlpha)
+    // 1. Convert raw angles to a Quaternion
+    const _tempEuler = new THREE.Euler(
+      THREE.MathUtils.degToRad(e.beta),
+      THREE.MathUtils.degToRad(e.alpha),
+      THREE.MathUtils.degToRad(-e.gamma),
+      'YXZ'
+    );
+    
+    // 2. Apply screen orientation correction to get the "target" quaternion
+    updateScreenOrientation();
+    _targetGyroQ.setFromEuler(_tempEuler).multiply(screenQuat);
+    // 3. Smoothly interpolate towards it
+    _currentGyroQ.slerp(_targetGyroQ, CONFIG.gyroSmoothing);
+
     // document.getElementById('debug-gyro').textContent =
     //   `gyro: α${deviceAlpha.toFixed(1)} β${deviceBeta.toFixed(1)} γ${deviceGamma.toFixed(1)}`;
   }, true);
-  }
+}
 
 // iOS 13+ requires explicit permission
 function requestMotionPermission() {
@@ -292,9 +305,9 @@ let screenQuat = new THREE.Quaternion();
 
 function updateScreenOrientation() {
   const angle = screen.orientation?.angle ?? window.orientation ?? 0;
-  if      (angle ===  90) screenQuat.copy(screenQuatLandscapeLeft);
+  if (angle === 90) screenQuat.copy(screenQuatLandscapeLeft);
   else if (angle === -90 || angle === 270) screenQuat.copy(screenQuatLandscapeRight);
-  else                    screenQuat.copy(screenQuatPortrait);
+  else screenQuat.copy(screenQuatPortrait);
 }
 
 window.addEventListener('orientationchange', updateScreenOrientation);
@@ -304,15 +317,10 @@ camera.rotation.order = 'YXZ';
 
 function applyGyroToCamera() {
   if (hasGyro) {
-    _euler.set(
-      THREE.MathUtils.degToRad(deviceBeta),
-      THREE.MathUtils.degToRad(deviceAlpha),
-      THREE.MathUtils.degToRad(-deviceGamma),
-      'YXZ'
-    );
-    camera.quaternion.setFromEuler(_euler);
-    camera.quaternion.multiply(screenQuat);
-    camera.quaternion.multiply(_touchOffsetQ);
+    // Combine the accumulated gyro rotation with the touch offset
+    const finalQ = _currentGyroQ.clone().multiply(_touchOffsetQ);
+
+    camera.quaternion.copy(finalQ);
     return;
   }
   camera.rotation.y = yaw;
@@ -340,9 +348,9 @@ function animate() {
   updateParallax();
 
   // Debug overlay
-  const o = targetOffset;
-  document.getElementById('debug-offset').textContent =
-    `offset: ${o.x.toFixed(3)}, ${o.y.toFixed(3)}, ${o.z.toFixed(3)}`;
+  // const o = targetOffset;
+  // document.getElementById('debug-offset').textContent =
+  //   `offset: ${o.x.toFixed(3)}, ${o.y.toFixed(3)}, ${o.z.toFixed(3)}`;
 
   renderer.render(scene, camera);
 }
