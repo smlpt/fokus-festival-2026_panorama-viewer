@@ -60,8 +60,10 @@ let hasGyro = false;
 const _targetGyroQ = new THREE.Quaternion(); // Temporary for delta calculation
 const _currentGyroQ = new THREE.Quaternion(); // The accumulated camera rotation from gyro
 
-// We'll store the touch offset separately so it doesn't get mixed into the gyro accumulation incorrectly
-let _touchOffsetQ = new THREE.Quaternion().identity();
+let touchYaw = 0;
+let touchPitch = 0;
+const _touchOffsetQ = new THREE.Quaternion();
+const _touchEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
 const PIVOT_RADIUS = 0.005; // metres, distance from phone to head pivot
 
@@ -239,10 +241,12 @@ function setupEventListeners() {
         const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 
-        // Apply touch delta as a rotation on top of whatever the gyro has set
-        const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx);
-        const qPitch = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy);
-        _touchOffsetQ.multiply(qYaw).multiply(qPitch);
+        touchYaw += dx;
+        touchPitch += dy;
+
+        // Clamp so vertical pan can't exceed 180° total (±90° from center)
+        const maxPitch = Math.PI / 2 - 0.001;
+        touchPitch = Math.max(-maxPitch, Math.min(maxPitch, touchPitch));
 
         e.preventDefault();
     }, { passive: false });
@@ -295,10 +299,13 @@ function updateScreenOrientation() {
 }
 
 function applyGyroToCamera() {
+
+    _touchEuler.set(touchPitch, touchYaw, 0, 'YXZ');
+    _touchOffsetQ.setFromEuler(_touchEuler);
+
     if (hasGyro) {
         // Combine the accumulated gyro rotation with the touch offset
-        const finalQ = _currentGyroQ.clone().multiply(_touchOffsetQ);
-
+        const finalQ = _touchOffsetQ.clone().multiply(_currentGyroQ);
         camera.quaternion.copy(finalQ);
         return;
     }
