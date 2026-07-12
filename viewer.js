@@ -32,7 +32,8 @@ const CONFIG = {
 
     // Parallax
     parallaxStrength: 0.1,         // max world-space camera offset (units)
-    gyroSmoothing: 0.2,         // lerp factor toward target (lower = smoother)
+    gyroSmoothing: 0.4,         // lerp factor toward target (lower = smoother)
+    gyroRollSmoothing: 0.05,
     nearRadius: 0.0,         // sphere radius for near objects (depth=1)
     farRadius: 20.0,         // sphere radius for far objects  (depth=0)
 
@@ -59,6 +60,13 @@ let hasGyro = false;
 
 const _targetGyroQ = new THREE.Quaternion(); // Temporary for delta calculation
 const _currentGyroQ = new THREE.Quaternion(); // The accumulated camera rotation from gyro
+
+// Stuff needed for isolating the twist component to dampen it more
+const ROLL_AXIS = new THREE.Vector3(0, 0, 1);
+const _targetSwingQ = new THREE.Quaternion();
+const _targetTwistQ = new THREE.Quaternion();
+const _currentSwingQ = new THREE.Quaternion();
+const _currentTwistQ = new THREE.Quaternion();
 
 let touchYaw = 0;
 let touchPitch = 0;
@@ -188,7 +196,16 @@ function startGyroscope() {
         updateScreenOrientation();
         _targetGyroQ.setFromEuler(_tempEuler).multiply(screenQuat);
         // 3. Smoothly interpolate towards it
-        _currentGyroQ.slerp(_targetGyroQ, CONFIG.gyroSmoothing);
+        
+        // Split into "where it's pointing" vs "how much it's rolled"
+        swingTwistDecompose(_targetGyroQ, ROLL_AXIS, _targetSwingQ, _targetTwistQ);
+
+        // Damp each independently — swing stays responsive, roll stays heavily smoothed
+        _currentSwingQ.slerp(_targetSwingQ, CONFIG.gyroSmoothing);
+        _currentTwistQ.slerp(_targetTwistQ, CONFIG.gyroRollSmoothing);
+
+        // Recombine
+        _currentGyroQ.copy(_currentSwingQ).multiply(_currentTwistQ);
 
         // document.getElementById('debug-gyro').textContent =
         //   `gyro: α${deviceAlpha.toFixed(1)} β${deviceBeta.toFixed(1)} γ${deviceGamma.toFixed(1)}`;
@@ -347,4 +364,19 @@ function animate() {
 
 function lerp(a, b, t) {
     return a * (1 - t) + b * t;
+}
+
+function swingTwistDecompose(q, axis, outSwing, outTwist) {
+    // Project the quaternion's vector part onto the twist axis
+    const dot = q.x * axis.x + q.y * axis.y + q.z * axis.z;
+    outTwist.set(axis.x * dot, axis.y * dot, axis.z * dot, q.w);
+
+    const len = outTwist.length();
+    if (len < 1e-6) {
+        outTwist.set(0, 0, 0, 1); // no roll component at all
+    } else {
+        outTwist.normalize();
+    }
+    // swing = q * twist⁻¹  →  reconstruct later as swing * twist
+    outSwing.copy(q).multiply(outTwist.clone().invert());
 }
