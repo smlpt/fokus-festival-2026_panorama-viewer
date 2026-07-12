@@ -20,7 +20,7 @@ let renderer;
 let scene;
 let camera;
 let material;
-let fov = 75;
+let fov = 90;
 let screenQuat = new THREE.Quaternion();
 let lastTouch = null;
 let lastPinchDist = null;
@@ -31,10 +31,10 @@ const CONFIG = {
     depthUrl: 'Delta_Amphitheater_Depth.png',      // grayscale depth map (white = near, black = far)
 
     // Parallax
-    parallaxStrength: 0.3,         // max world-space camera offset (units)
+    parallaxStrength: 0.1,         // max world-space camera offset (units)
     gyroSmoothing: 0.2,         // lerp factor toward target (lower = smoother)
-    nearRadius: 0.20,         // sphere radius for near objects (depth=1)
-    farRadius: 1.0,         // sphere radius for far objects  (depth=0)
+    nearRadius: 0.0,         // sphere radius for near objects (depth=1)
+    farRadius: 20.0,         // sphere radius for far objects  (depth=0)
 
     // Keyboard simulation (desktop testing)
     keyStep: 0.00005,                 // how much each key press nudges velocity
@@ -86,7 +86,7 @@ async function setupScene() {
     document.body.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 10);
+    camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.01, 10);
     camera.position.set(0, 0, 0);
     camera.rotation.order = 'YXZ';
 
@@ -112,6 +112,7 @@ async function setupScene() {
             nearRadius: { value: CONFIG.nearRadius },
             farRadius: { value: CONFIG.farRadius },
             depthStrength: { value: CONFIG.parallaxStrength },
+            numSteps: { value: 32 }
         },
         side: THREE.FrontSide,
     });
@@ -280,7 +281,7 @@ function setupEventListeners() {
 }
 
 function applyZoom(delta) {
-    fov = Math.max(30, Math.min(110, fov + delta));
+    fov = Math.max(30, Math.min(120, fov + delta));
     camera.fov = fov;
     camera.updateProjectionMatrix();
 }
