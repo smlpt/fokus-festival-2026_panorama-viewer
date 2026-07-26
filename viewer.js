@@ -31,11 +31,11 @@ const CONFIG = {
     depthUrl: 'Delta_Amphitheater_Depth.png',      // grayscale depth map (white = near, black = far)
 
     // Parallax
-    parallaxStrength: 0.1,         // max world-space camera offset (units)
-    gyroSmoothing: 0.7,         // lerp factor toward target (lower = smoother)
+    parallaxStrength: 1.0,         // max world-space camera offset (units)
+    gyroSmoothing: 0.3,         // lerp factor toward target (lower = smoother)
     gyroRollSmoothing: 0.03,
-    nearRadius: 0.1,         // sphere radius for near objects (depth=1)
-    farRadius: 20.0,         // sphere radius for far objects  (depth=0)
+    nearRadius: 0.001,         // sphere radius for near objects (depth=1)
+    farRadius: 10.0,         // sphere radius for far objects  (depth=0)
 
     // Keyboard simulation (desktop testing)
     keyStep: 0.00005,                 // how much each key press nudges velocity
@@ -105,6 +105,8 @@ async function setupScene() {
 
     panoramaTex.minFilter = THREE.LinearFilter;
     depthTex.minFilter = THREE.LinearFilter;
+    panoramaTex.wrapS = THREE.RepeatWrapping;
+    depthTex.wrapS = THREE.RepeatWrapping;
 
     material = new THREE.ShaderMaterial({
         vertexShader: vertexShaderCode,
@@ -116,6 +118,7 @@ async function setupScene() {
             nearRadius: { value: CONFIG.nearRadius },
             farRadius: { value: CONFIG.farRadius },
             depthStrength: { value: CONFIG.parallaxStrength },
+            depthCurve: {value: 2.0},
             numSteps: { value: 32 }
         },
         side: THREE.FrontSide,
@@ -326,11 +329,10 @@ function applyGyroToCamera() {
 }
 
 function updateParallax() {
-    // // Extract right and up from current camera orientation
     camera.getWorldDirection(forward);
 
     const targetPosition = new THREE.Vector3();
-    targetPosition.addScaledVector(forward, -0.1);
+    targetPosition.addScaledVector(forward, 0.1);
 
     material.uniforms.parallaxOffset.value.copy(targetPosition);
 }
