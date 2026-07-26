@@ -32,9 +32,9 @@ const CONFIG = {
 
     // Parallax
     parallaxStrength: 0.1,         // max world-space camera offset (units)
-    gyroSmoothing: 0.4,         // lerp factor toward target (lower = smoother)
-    gyroRollSmoothing: 0.05,
-    nearRadius: 0.0,         // sphere radius for near objects (depth=1)
+    gyroSmoothing: 0.7,         // lerp factor toward target (lower = smoother)
+    gyroRollSmoothing: 0.03,
+    nearRadius: 0.1,         // sphere radius for near objects (depth=1)
     farRadius: 20.0,         // sphere radius for far objects  (depth=0)
 
     // Keyboard simulation (desktop testing)
@@ -43,9 +43,6 @@ const CONFIG = {
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const keys = {};                        // currently held keyboard keys
-let parallaxVelocity = new THREE.Vector3();
-let parallaxPosition = new THREE.Vector3();
-//let targetOffset     = new THREE.Vector3();
 
 const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
@@ -55,7 +52,6 @@ const forward = new THREE.Vector3();
 const up = new THREE.Vector3(0, 1, 0);
 
 // Gyroscope / device orientation state
-let prevDeviceAlpha = null; // Store previous alpha to calculate delta
 let hasGyro = false;
 
 const _targetGyroQ = new THREE.Quaternion(); // Temporary for delta calculation
@@ -72,8 +68,6 @@ let touchYaw = 0;
 let touchPitch = 0;
 const _touchOffsetQ = new THREE.Quaternion();
 const _touchEuler = new THREE.Euler(0, 0, 0, 'YXZ');
-
-const PIVOT_RADIUS = 0.005; // metres, distance from phone to head pivot
 
 // Mouse-drag state (desktop fallback for rotation)
 let isDragging = false;
@@ -198,14 +192,15 @@ function startGyroscope() {
         // 3. Smoothly interpolate towards it
         
         // Split into "where it's pointing" vs "how much it's rolled"
-        swingTwistDecompose(_targetGyroQ, ROLL_AXIS, _targetSwingQ, _targetTwistQ);
+        // swingTwistDecompose(_targetGyroQ, ROLL_AXIS, _targetSwingQ, _targetTwistQ);
 
         // Damp each independently — swing stays responsive, roll stays heavily smoothed
-        _currentSwingQ.slerp(_targetSwingQ, CONFIG.gyroSmoothing);
-        _currentTwistQ.slerp(_targetTwistQ, CONFIG.gyroRollSmoothing);
+        // _currentSwingQ.slerp(_targetSwingQ, CONFIG.gyroSmoothing);
+        // _currentTwistQ.slerp(_targetTwistQ, CONFIG.gyroRollSmoothing);
 
         // Recombine
-        _currentGyroQ.copy(_currentSwingQ).multiply(_currentTwistQ);
+        // _currentGyroQ.copy(_currentSwingQ).multiply(_currentTwistQ);
+        _currentGyroQ.slerp(_targetGyroQ, CONFIG.gyroSmoothing);
 
         // document.getElementById('debug-gyro').textContent =
         //   `gyro: α${deviceAlpha.toFixed(1)} β${deviceBeta.toFixed(1)} γ${deviceGamma.toFixed(1)}`;
@@ -255,15 +250,15 @@ function setupEventListeners() {
     renderer.domElement.addEventListener('touchmove', e => {
         if (e.touches.length !== 1 || !lastTouch) return;
         const dx = (e.touches[0].clientX - lastTouch.x) * 0.002;
-        const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
+        // const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 
         touchYaw += dx;
-        touchPitch += dy;
+        // touchPitch += dy;
 
         // Clamp so vertical pan can't exceed 180° total (±90° from center)
-        const maxPitch = Math.PI / 2 - 0.001;
-        touchPitch = Math.max(-maxPitch, Math.min(maxPitch, touchPitch));
+        // const maxPitch = Math.PI / 2 - 0.001;
+        // touchPitch = Math.max(-maxPitch, Math.min(maxPitch, touchPitch));
 
         e.preventDefault();
     }, { passive: false });
@@ -317,7 +312,7 @@ function updateScreenOrientation() {
 
 function applyGyroToCamera() {
 
-    _touchEuler.set(touchPitch, touchYaw, 0, 'YXZ');
+    _touchEuler.set(0, touchYaw, 0, 'YXZ');
     _touchOffsetQ.setFromEuler(_touchEuler);
 
     if (hasGyro) {
