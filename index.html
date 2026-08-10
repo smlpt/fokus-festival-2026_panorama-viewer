@@ -1,61 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Panorama Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fokus Festival Panoramas</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; width: 100vw; height: 100vh; }
-    canvas { display: block; }
+    body {
+      background: #0a0a0a;
+      color: #eee;
+      font-family: 'Bebas Neue', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+      font-size:xx-large;
+    }
 
-    #ui {
-      position: absolute;
-      top: 16px;
-      left: 16px;
+    .container {
+      width: 90%; 
+      max-width: 500px;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #fff600;
+      margin-bottom: 10px;
+    }
+
+    p {
+      line-height: 1.6;
+      color: #e1e1e1;
+      margin-bottom: 30px;
+      font-size: large;
+    }
+
+    .btn-grid {
+      display: grid;
+      gap: 15px;
+      grid-template-columns: repeat(2, 1fr);
+      font-size: large;
+    }
+
+    .loc-btn {
+      background: #222;
       color: #fff;
-      font-family: monospace;
+      border: 1px solid #444;
+      padding: 12px;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: 0.3s;
+      font-weight: bold;
+    }
+
+    .loc-btn:hover {
+      background: #fff600;
+      color: #000;
+    }
+
+    .github-link {
+      margin-top: 40px;
+      display: block;
+      color: #666;
       font-size: 12px;
-      background: rgba(0,0,0,0.45);
-      padding: 10px 14px;
-      border-radius: 8px;
-      line-height: 1.8;
-      pointer-events: none;
+      text-decoration: none;
     }
-
-    #permission-btn {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(255,255,255,0.15);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.4);
-      padding: 14px 28px;
-      font-size: 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      display: none;
-    }
-    #permission-btn:hover { background: rgba(255,255,255,0.25); }
   </style>
 </head>
+
 <body>
-  <!-- <div id="ui"> -->
-    <!-- <div>↑↓←→ rotate &nbsp;|&nbsp; SHIFT+↑↓ tilt</div>
-    <div>WASD / arrow keys: parallax offset</div>
-    <div id="debug-gyro">gyro: —</div>
-    <div id="debug-offset">offset: 0.00, 0.00, 0.00</div>
-    <div id="debug-acceleration">acc: 0.0, 0.0, 0.0</div>
-    <div id="debug-depth">depth strength: <span id="depth-val">1.0</span></div>
-  </div> -->
+  <div class="container">
+    <h1>Träum Weiter</h1>
+    <p>Auf dem Gelände sind an verschiedenen Orten QR Codes versteckt, die dich in alternative Welten eintauchen lassen.
+      Jeder Ort bietet dir verschiedene Versionen an, zwischen denen du wechseln kannst.</p>
 
-  <!-- iOS requires a user gesture to enable DeviceMotion -->
-  <button id="permission-btn" onclick="requestMotionPermission()">
-    Tap to enable gyroscope
-  </button>
+    <p>QR codes are hidden in various locations throughout the grounds, allowing you to immerse yourself in alternative worlds.
+      Each location offers you different versions that you can switch between.</p>
 
+    <div class="btn-grid">
+      <a href="#Garden" class="loc-btn">Garden</a>
+      <a href="#Silo" class="loc-btn">Silo</a>
+      <a href="#Delta" class="loc-btn">Delta</a>
+      <a href="#Parking" class="loc-btn">Skate Area</a>
+      <a href="#Inside" class="loc-btn">Inside W1</a>
+      <a href="#Stages" class="loc-btn">Stages</a>
+      <a href="#Nh3" class="loc-btn">NH3</a>
+      <a href="#Hall" class="loc-btn">The Hall</a>
+    </div>
+
+    <p>Disclaimer: Parts of the panoramas were created with generative AI models.</p>
+
+    <a href="https://github.com/yourusername/yourrepo" class="github-link">Technical Info & Source Code</a>
+  </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="viewer.js"></script>
 </body>
+
 </html>

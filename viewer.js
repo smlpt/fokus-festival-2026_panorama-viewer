@@ -25,10 +25,15 @@ let screenQuat = new THREE.Quaternion();
 let lastTouch = null;
 let lastPinchDist = null;
 
+
+let currentVersionIndex = 0;
+let versions = []; // Array of folder names for the current location
+let currentLocation = "";
+
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
-    panoramaUrl: 'Delta_Amphitheater.jpg',   // swap for your equirectangular image
-    depthUrl: 'Delta_Amphitheater_Depth.png',      // grayscale depth map (white = near, black = far)
+    // panoramaUrl: 'Delta_Amphitheater.jpg',
+    // depthUrl: 'Delta_Amphitheater_Depth.png',
 
     // Parallax
     parallaxStrength: 1.0,         // max world-space camera offset (units)
@@ -37,9 +42,26 @@ const CONFIG = {
     nearRadius: 0.001,         // sphere radius for near objects (depth=1)
     farRadius: 10.0,         // sphere radius for far objects  (depth=0)
 
-    // Keyboard simulation (desktop testing)
-    keyStep: 0.00005,                 // how much each key press nudges velocity
+    keyStep: 0.00005,        // how much each key press nudges velocity
 };
+
+async function resolveLocation() {
+    currentLocation = window.location.hash.substring(1);
+    if (!currentLocation) {
+        console.log("No location specified in URL.");
+        return;
+    }
+    try {
+        const response = await fetch(`resources/${currentLocation}/manifest.json`);
+        if (!response.ok) throw new Error("Manifest not found");
+        const data = await response.json();
+        versions = data.versions;
+    } catch (e) {
+        console.error("Could not load manifest for location:", currentLocation);
+        document.body.innerHTML = "<h1>Error loading location views.</h1>";
+    }
+}
+
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 const keys = {};                        // currently held keyboard keys
@@ -82,8 +104,21 @@ const screenQuatLandscapeRight = new THREE.Quaternion().setFromAxisAngle(new THR
 // ─── SCENE SETUP ─────────────────────────────────────────────────────────────
 
 async function setupScene() {
+
+    // 1. Check if we are on a "location" page or just the landing page
+    const hash = window.location.hash;
+    
+    if (!hash) {
+        console.log("Landing page detected. Standing by...");
+        return; // Exit early. Don't start Three.js, don't load shaders.
+    }
+
+    document.body.innerHTML = '';
+
     await preloadShaders();
 
+
+    // Initialize renderer
     renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -98,22 +133,15 @@ async function setupScene() {
     // Flip normals so we see the inside
     geometry.scale(-1, 1, 1);
 
-    // Load textures
-    const textureLoader = new THREE.TextureLoader();
-    const panoramaTex = textureLoader.load(CONFIG.panoramaUrl, onTextureLoaded, undefined, onTextureError);
-    const depthTex = textureLoader.load(CONFIG.depthUrl, null, undefined, onDepthError);
-
-    panoramaTex.minFilter = THREE.LinearFilter;
-    depthTex.minFilter = THREE.LinearFilter;
-    panoramaTex.wrapS = THREE.RepeatWrapping;
-    depthTex.wrapS = THREE.RepeatWrapping;
+    const placeholderTex = new THREE.Texture();
+    const placeholderDepth = new THREE.Texture();
 
     material = new THREE.ShaderMaterial({
         vertexShader: vertexShaderCode,
         fragmentShader: fragmentShaderCode,
         uniforms: {
-            panorama: { value: panoramaTex },
-            depthMap: { value: depthTex },
+            panorama: { value: placeholderTex },
+            depthMap: { value: placeholderDepth },
             parallaxOffset: { value: new THREE.Vector3() },
             nearRadius: { value: CONFIG.nearRadius },
             farRadius: { value: CONFIG.farRadius },
@@ -127,7 +155,15 @@ async function setupScene() {
     const sphere = new THREE.Mesh(geometry, material);
     scene.add(sphere);
 
+    await resolveLocation(); 
+        if (versions.length > 0) {
+            currentVersionIndex = Math.floor(Math.random() * versions.length);
+            loadPanoramaVersion(versions[currentVersionIndex]);
+        }
+
+
     setupEventListeners();
+    setupCycleButton();
 
     // Show the permission button only on iOS
     if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
@@ -192,21 +228,7 @@ function startGyroscope() {
         // 2. Apply screen orientation correction to get the "target" quaternion
         updateScreenOrientation();
         _targetGyroQ.setFromEuler(_tempEuler).multiply(screenQuat);
-        // 3. Smoothly interpolate towards it
-        
-        // Split into "where it's pointing" vs "how much it's rolled"
-        // swingTwistDecompose(_targetGyroQ, ROLL_AXIS, _targetSwingQ, _targetTwistQ);
-
-        // Damp each independently — swing stays responsive, roll stays heavily smoothed
-        // _currentSwingQ.slerp(_targetSwingQ, CONFIG.gyroSmoothing);
-        // _currentTwistQ.slerp(_targetTwistQ, CONFIG.gyroRollSmoothing);
-
-        // Recombine
-        // _currentGyroQ.copy(_currentSwingQ).multiply(_currentTwistQ);
         _currentGyroQ.slerp(_targetGyroQ, CONFIG.gyroSmoothing);
-
-        // document.getElementById('debug-gyro').textContent =
-        //   `gyro: α${deviceAlpha.toFixed(1)} β${deviceBeta.toFixed(1)} γ${deviceGamma.toFixed(1)}`;
     }, true);
 }
 
@@ -296,7 +318,6 @@ function setupEventListeners() {
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
 }
 
 function applyZoom(delta) {
@@ -338,6 +359,12 @@ function updateParallax() {
 }
 
 
+window.addEventListener('hashchange', () => {
+        // This re-runs everything when the URL hash changes
+        console.log("Hash changed to:", window.location.hash);
+        location.reload(); 
+    });
+
 setupScene();
 
 
@@ -354,6 +381,42 @@ function animate() {
     //   `offset: ${o.x.toFixed(3)}, ${o.y.toFixed(3)}, ${o.z.toFixed(3)}`;
 
     renderer.render(scene, camera);
+}
+
+
+function loadPanoramaVersion(versionFolderName) {
+    const basePath = `resources/${currentLocation}/${versionFolderName}/`;
+    const imgName = `${versionFolderName}.jpg`;
+    const depthName = `${versionFolderName}_depth.jpg`;
+    console.log(`Loading: ${basePath}${imgName}`);
+    const textureLoader = new THREE.TextureLoader();
+    
+    // Update the material textures
+    const panoramaTex = textureLoader.load(`${basePath}${imgName}`, onTextureLoaded, undefined, onTextureError);
+    const depthTex = textureLoader.load(`${basePath}${depthName}`, null, undefined, onDepthError);
+    panoramaTex.minFilter = THREE.LinearFilter;
+    depthTex.minFilter = THREE.LinearFilter;
+    panoramaTex.wrapS = THREE.RepeatWrapping;
+    depthTex.wrapS = THREE.RepeatWrapping;
+    
+    material.uniforms.panorama.value = panoramaTex;
+    material.uniforms.depthMap.value = depthTex;
+}
+
+function setupCycleButton() {
+    const btn = document.createElement('button');
+    btn.id = 'cycle-btn';
+    btn.innerHTML = 'Next View';
+    btn.style.cssText = `
+        position: absolute; bottom: 20px; right: 20px;
+        background: rgba(0,0,0,0.5); color: white; border: 1px solid #fff;
+        padding: 10px 15px; border-radius: 5px; cursor: pointer; font-family: monospace;
+    `;
+    btn.onclick = () => {
+        currentVersionIndex = (currentVersionIndex + 1) % versions.length;
+        loadPanoramaVersion(versions[currentVersionIndex]);
+    };
+    document.body.appendChild(btn);
 }
 
 
