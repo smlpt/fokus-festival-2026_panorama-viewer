@@ -20,7 +20,7 @@ let renderer;
 let scene;
 let camera;
 let material;
-let fov = 90;
+let fov = 110;
 let screenQuat = new THREE.Quaternion();
 let lastTouch = null;
 let lastPinchDist = null;
@@ -36,7 +36,7 @@ const CONFIG = {
     // depthUrl: 'Delta_Amphitheater_Depth.png',
 
     // Parallax
-    parallaxStrength: 1.0,         // max world-space camera offset (units)
+    parallaxStrength: 0.75,         // max world-space camera offset (units)
     gyroSmoothing: 0.3,         // lerp factor toward target (lower = smoother)
     gyroRollSmoothing: 0.03,
     nearRadius: 0.001,         // sphere radius for near objects (depth=1)
@@ -321,7 +321,7 @@ function setupEventListeners() {
 }
 
 function applyZoom(delta) {
-    fov = Math.max(30, Math.min(120, fov + delta));
+    fov = Math.max(30, Math.min(140, fov + delta));
     camera.fov = fov;
     camera.updateProjectionMatrix();
 }
