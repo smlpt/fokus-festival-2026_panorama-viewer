@@ -88,6 +88,7 @@ const _currentTwistQ = new THREE.Quaternion();
 
 let touchYaw = 0;
 let touchPitch = 0;
+const MAX_PITCH = Math.PI / 2 - 0.01;
 const _touchOffsetQ = new THREE.Quaternion();
 const _touchEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -257,7 +258,7 @@ function setupEventListeners() {
         if (!isDragging) return;
         yaw += (e.clientX - dragStart.x) * 0.002;
         pitch += (e.clientY - dragStart.y) * 0.002;
-        pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+        pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch));
         dragStart.x = e.clientX;
         dragStart.y = e.clientY;
     });
@@ -275,15 +276,14 @@ function setupEventListeners() {
     renderer.domElement.addEventListener('touchmove', e => {
         if (e.touches.length !== 1 || !lastTouch) return;
         const dx = (e.touches[0].clientX - lastTouch.x) * 0.002;
-        // const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
+        const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 
         touchYaw += dx;
-        // touchPitch += dy;
+        touchPitch += dy;
 
         // Clamp so vertical pan can't exceed 180° total (±90° from center)
-        // const maxPitch = Math.PI / 2 - 0.001;
-        // touchPitch = Math.max(-maxPitch, Math.min(maxPitch, touchPitch));
+        touchPitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, touchPitch));
 
         e.preventDefault();
     }, { passive: false });
@@ -345,8 +345,10 @@ function applyGyroToCamera() {
         camera.quaternion.copy(finalQ);
         return;
     }
-    camera.rotation.y = yaw;
-    camera.rotation.x = pitch;
+    // No gyro (desktop, or iOS before motion access is granted):
+    // use mouse drag and touch drag for rotation
+    camera.rotation.y = yaw + touchYaw;
+    camera.rotation.x = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch + touchPitch));
 }
 
 function updateParallax() {
