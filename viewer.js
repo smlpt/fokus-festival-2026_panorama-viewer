@@ -167,7 +167,7 @@ async function setupScene() {
 
     // Show the permission button only on iOS
     if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
-        document.getElementById('permission-btn').style.display = 'block';
+        setupPermissionButton();
     } else {
         startGyroscope();
     }
@@ -241,7 +241,7 @@ function requestMotionPermission() {
             })
             .catch(console.error);
     }
-    document.getElementById('permission-btn').style.display = 'none';
+    document.getElementById('permission-btn')?.remove();
 }
 
 function setupEventListeners() {
@@ -393,7 +393,7 @@ function loadPanoramaVersion(versionFolderName) {
     
     // Update the material textures
     const panoramaTex = textureLoader.load(`${basePath}${imgName}`, onTextureLoaded, undefined, onTextureError);
-    const depthTex = textureLoader.load(`${basePath}${depthName}`, null, undefined, onDepthError);
+    const depthTex = textureLoader.load(`${basePath}${depthName}`, undefined, undefined, onDepthError);
     panoramaTex.minFilter = THREE.LinearFilter;
     depthTex.minFilter = THREE.LinearFilter;
     panoramaTex.wrapS = THREE.RepeatWrapping;
@@ -416,6 +416,20 @@ function setupCycleButton() {
         currentVersionIndex = (currentVersionIndex + 1) % versions.length;
         loadPanoramaVersion(versions[currentVersionIndex]);
     };
+    document.body.appendChild(btn);
+}
+
+
+function setupPermissionButton() {
+    const btn = document.createElement('button');
+    btn.id = 'permission-btn';
+    btn.innerHTML = 'Enable Motion';
+    btn.style.cssText = `
+        position: absolute; bottom: 20px; left: 20px;
+        background: rgba(0,0,0,0.5); color: white; border: 1px solid #fff;
+        padding: 10px 15px; border-radius: 5px; cursor: pointer; font-family: monospace;
+    `;
+    btn.onclick = requestMotionPermission;
     document.body.appendChild(btn);
 }
 
