@@ -32,9 +32,6 @@ let currentLocation = "";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const CONFIG = {
-    // panoramaUrl: 'Delta_Amphitheater.jpg',
-    // depthUrl: 'Delta_Amphitheater_Depth.png',
-
     // Parallax
     parallaxStrength: 0.75,         // max world-space camera offset (units)
     gyroSmoothing: 0.3,         // lerp factor toward target (lower = smoother)
@@ -112,6 +109,8 @@ async function setupScene() {
         console.log("Landing page detected. Standing by...");
         return; // Exit early. Don't start Three.js, don't load shaders.
     }
+
+    toggleLoader(true);
 
     document.body.innerHTML = '';
 
@@ -385,15 +384,36 @@ function animate() {
 
 
 function loadPanoramaVersion(versionFolderName) {
+
+    toggleLoader(true); // Show spinner for every version change
+
     const basePath = `resources/${currentLocation}/${versionFolderName}/`;
     const imgName = `${versionFolderName}.jpg`;
     const depthName = `${versionFolderName}_depth.jpg`;
     console.log(`Loading: ${basePath}${imgName}`);
     const textureLoader = new THREE.TextureLoader();
+
+    let loadedCount = 0;
+    const totalToLoad = 2; // Panorama + Depth map
+
+     const onAllTexturesLoaded = () => {
+        loadedCount++;
+        if (loadedCount === totalToLoad) {
+            toggleLoader(false); // Hide spinner when done!
+        }
+    };
+    // Update your texture loading calls:
+    const panoramaTex = textureLoader.load(`${basePath}${imgName}`, (tex) => {
+        onAllTexturesLoaded();
+        onTextureLoaded();
+    }, undefined, onTextureError);
+    const depthTex = textureLoader.load(`${basePath}${depthName}`, (tex) => {
+        onAllTexturesLoaded();
+    }, undefined, onDepthError);
     
     // Update the material textures
-    const panoramaTex = textureLoader.load(`${basePath}${imgName}`, onTextureLoaded, undefined, onTextureError);
-    const depthTex = textureLoader.load(`${basePath}${depthName}`, undefined, undefined, onDepthError);
+    // const panoramaTex = textureLoader.load(`${basePath}${imgName}`, onTextureLoaded, undefined, onTextureError);
+    // const depthTex = textureLoader.load(`${basePath}${depthName}`, undefined, undefined, onDepthError);
     panoramaTex.minFilter = THREE.LinearFilter;
     depthTex.minFilter = THREE.LinearFilter;
     panoramaTex.wrapS = THREE.RepeatWrapping;
@@ -454,3 +474,25 @@ function swingTwistDecompose(q, axis, outSwing, outTwist) {
     // swing = q * twist⁻¹  →  reconstruct later as swing * twist
     outSwing.copy(q).multiply(outTwist.clone().invert());
 }
+
+function toggleLoader(show) {
+    if (show) {
+        // If not already there, create it
+        if (!document.getElementById('loader-container')) {
+            const loader = document.createElement('div');
+            loader.id = 'loader-container';
+            loader.innerHTML = `
+                <div class="spinner"></div>
+                <p>Loading View...</p>
+            `;
+            document.body.appendChild(loader);
+        }
+    } else {
+        const loader = document.getElementById('loader-container');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 500);
+        }
+    }
+}
+
