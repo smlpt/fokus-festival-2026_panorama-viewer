@@ -449,9 +449,20 @@ function setupPermissionButton() {
     btn.id = 'permission-btn';
     btn.innerHTML = 'Enable Motion';
     btn.style.cssText = `
-        position: absolute; bottom: 20px; left: 20px;
-        background: rgba(0,0,0,0.5); color: white; border: 1px solid #fff;
-        padding: 10px 15px; border-radius: 5px; cursor: pointer; font-family: monospace;
+        position: absolute; 
+        top: 50%; 
+        left: 50%; 
+        transform: translate(-50%, -50%);
+        background: #fff600; 
+        color: black; 
+        border: 2px solid #000; 
+        padding: 10px 20px; 
+        border-radius: 10px; 
+        cursor: pointer; 
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        z-index: 9999;
     `;
     btn.onclick = requestMotionPermission;
     document.body.appendChild(btn);
