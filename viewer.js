@@ -273,7 +273,7 @@ function setupEventListeners() {
     });
     renderer.domElement.addEventListener('touchmove', e => {
         if (e.touches.length !== 1 || !lastTouch) return;
-        const dx = (e.touches[0].clientX - lastTouch.x) * dragSpeedFromFOV;
+        const dx = (e.touches[0].clientX - lastTouch.x) * dragSpeedFromFOV();
         // const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 
