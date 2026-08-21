@@ -254,8 +254,8 @@ function setupEventListeners() {
     window.addEventListener('mouseup', () => { isDragging = false; });
     window.addEventListener('mousemove', e => {
         if (!isDragging) return;
-        yaw += (e.clientX - dragStart.x) * 0.002;
-        pitch += (e.clientY - dragStart.y) * 0.002;
+        yaw += (e.clientX - dragStart.x) * dragSpeedFromFOV();
+        pitch += (e.clientY - dragStart.y) * dragSpeedFromFOV();
         pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
         dragStart.x = e.clientX;
         dragStart.y = e.clientY;
@@ -273,7 +273,7 @@ function setupEventListeners() {
     });
     renderer.domElement.addEventListener('touchmove', e => {
         if (e.touches.length !== 1 || !lastTouch) return;
-        const dx = (e.touches[0].clientX - lastTouch.x) * 0.002;
+        const dx = (e.touches[0].clientX - lastTouch.x) * dragSpeedFromFOV;
         // const dy = (e.touches[0].clientY - lastTouch.y) * 0.002;
         lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 
@@ -323,6 +323,10 @@ function applyZoom(delta) {
     fov = Math.max(30, Math.min(140, fov + delta));
     camera.fov = fov;
     camera.updateProjectionMatrix();
+}
+
+function dragSpeedFromFOV() {
+    return 1.8e-7 * fov**2 + 0.0004;
 }
 
 
